@@ -50,17 +50,14 @@ RUN set -eux; \
 
 # Build the Next.js app (standalone)
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
-
-# remove build tools to keep builder small
-RUN apk del .build-deps || true
+RUN npx update-browserslist-db@latest && npm run build
 
 # --- NEW: clean builder /app, keep only standalone/static/public/yt-dlp to minimize final image ---
 RUN set -eux; \
     mkdir -p /tmp/clean/.next/static; \
     # prefer standalone output (Next.js standalone build layout); fallback to copying .next if standalone missing
     if [ -d /app/.next/standalone ]; then \
-      mv -a /app/.next/standalone /tmp/clean/; \
+      mv /app/.next/standalone /tmp/clean/; \
     fi; \
     # copy static and public if present
     mv /app/.next/static /tmp/clean/.next 2>/dev/null || true; \
@@ -69,7 +66,7 @@ RUN set -eux; \
     if [ -f /app/yt-dlp ]; then mv /app/yt-dlp /tmp/clean/; fi; \
     [ -f /tmp/clean/yt-dlp ] && chmod a+rx /tmp/clean/yt-dlp || true; \
     # remove everything at /app root and move cleaned artifacts back
-    rm /app; mkdir /app; \
+    rm /app/* -rf; \
     mv /tmp/clean/* /app/ || true; rmdir /tmp/clean || true; \
     echo "Remaining /app contents:"; ls -al /app
 
