@@ -38,14 +38,14 @@ RUN set -eux; \
     else \
       token="yt-dlp_musllinux"; \
     fi; \
-    # try to find a musl binary matching the token (avoid .zip); fallback to first non-zip asset
-    url="$(curl -fsSL "$release_api" | grep -o '"browser_download_url":[[:space:]]*"[^"]*' | sed 's/.*"browser_download_url":[[:space:]]*"\([^"]*\)".*/\1/' | grep -i "$token" | grep -v '\.zip$' | head -n1)"; \
+    # extract URLs reliably with awk (field 4 is the URL in "browser_download_url": "..." lines)
+    url="$(curl -fsSL "$release_api" | awk -F'\"' '/browser_download_url/ {print $4}' | grep -i "$token" | grep -v '\.zip$' | head -n1)"; \
     if [ -z "$url" ]; then \
-      url="$(curl -fsSL "$release_api" | grep -o '"browser_download_url":[[:space:]]*"[^"]*' | sed 's/.*"browser_download_url":[[:space:]]*"\([^"]*\)".*/\1/' | grep -v '\.zip$' | head -n1)"; \
+      url="$(curl -fsSL "$release_api" | awk -F'\"' '/browser_download_url/ {print $4}' | grep -v '\.zip$' | head -n1)"; \
     fi; \
-    [ -n "$url" ] || { echo "Could not find yt-dlp asset for ${YTDLP_VERSION} (arch=${arch})"; exit 1; }; \
-    echo "Downloading yt-dlp from: $url"; \
-    curl -fsSL "$url" -o /app/yt-dlp && chmod a+rx /app/yt-dlp && upx --best --lzma /app/yt-dlp || true; \
+    if [ -z "$url" ]; then echo "Could not find yt-dlp asset for ${YTDLP_VERSION} (arch=${arch})"; exit 1; fi; \
+    echo "Downloading yt-dlp from: ${url}"; \
+    curl -fsSL "${url}" -o /app/yt-dlp && chmod a+rx /app/yt-dlp && upx --best --lzma /app/yt-dlp || true; \
     ls -lh /app/yt-dlp
 
 # Build the Next.js app (standalone)
