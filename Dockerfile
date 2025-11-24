@@ -33,21 +33,21 @@ RUN apk add --no-cache --virtual .build-deps curl ca-certificates upx bash && \
 RUN set -eux; \
     release_api="https://api.github.com/repos/yt-dlp/yt-dlp/releases/tags/${YTDLP_VERSION}"; \
     arch="$(echo "${TARGETARCH:-$(uname -m)}" | tr '[:upper:]' '[:lower:]')"; \
-    case "$arch" in \
-      amd64|x86_64) arch_tokens=("musl" "x86_64" "amd64" "musllinux_x86_64" "yt-dlp_musllinux"); ;; \
-      arm64|aarch64) arch_tokens=("musl" "aarch64" "arm64" "musllinux_aarch64" "yt-dlp_musllinux_aarch64"); ;; \
-      *) arch_tokens=("musl" "linux"); ;; \
-    esac; \
-    # build grep pattern to prefer musl & arch-specific assets, avoid zip files and python/zipped builds
-    pattern="$(IFS='|'; echo "${arch_tokens[*]}")"; \
-    url=$(curl -fsSL "$release_api" | grep -oP '"browser_download_url":\s*"\K[^"]+' | awk -v pat="$pattern" 'BEGIN{IGNORECASE=1} $0 !~ /\.zip$/ && $0 ~ pat {print; exit}'); \
+    if [ "$arch" = "amd64" ] || [ "$arch" = "x86_64" ]; then \
+      pattern="musl|x86_64|amd64|musllinux_x86_64|yt-dlp_musllinux"; \
+    elif [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then \
+      pattern="musl|aarch64|arm64|musllinux_aarch64|yt-dlp_musllinux_aarch64"; \
+    else \
+      pattern="musl|linux"; \
+    fi; \
+    url=$(curl -fsSL "$release_api" | awk -F '"' -v pat="$pattern" 'BEGIN{IGNORECASE=1} $4 !~ /\.zip$/ && $4 ~ pat {print $4; exit}'); \
     if [ -z "$url" ]; then \
       # fallback: first non-zip asset
-      url=$(curl -fsSL "$release_api" | grep -oP '"browser_download_url":\s*"\K[^"]+' | awk '!/\.zip$/ {print; exit}'); \
+      url=$(curl -fsSL "$release_api" | awk -F '"' '!/\.zip$/ {print $4; exit}'); \
     fi; \
     if [ -z "$url" ]; then echo "Could not find yt-dlp binary asset for ${YTDLP_VERSION} (arch=${arch})"; exit 1; fi; \
     echo "Downloading yt-dlp from: $url"; \
-    curl -fsSL "$url" -o /app/yt-dlp && chmod a+rx /app/yt-dlp && ls -lh /app/yt-dlp
+    curl -fsSL "$url" -o /app/yt-dlp && chmod a+rx /app/yt-dlp && upx --best --lzma /app/yt-dlp || true && ls -lh /app/yt-dlp
 
 # Build the Next.js app (standalone)
 ENV NEXT_TELEMETRY_DISABLED=1
