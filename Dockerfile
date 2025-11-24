@@ -1,5 +1,4 @@
 FROM node:18.20.0-alpine3.18 AS base
-# 참고 https://github.com/vercel/next.js/blob/canary/examples/with-docker/Dockerfile
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -18,51 +17,72 @@ RUN \
 
 # Rebuild the source code only when needed
 FROM base AS builder
+# expose buildkit target arch
+ARG TARGETARCH
+ARG YTDLP_VERSION=2025.11.12
+
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Next.js collects completely anonymous telemetry data about general usage.
-# Learn more here: https://nextjs.org/telemetry
-# Uncomment the following line in case you want to disable telemetry during the build.
+# Install minimal tools for fetching and compressing yt-dlp, and for building
+RUN apk add --no-cache --virtual .build-deps curl ca-certificates upx bash && \
+    update-ca-certificates
+
+# Download yt-dlp musl binary (choose asset by build target arch), avoid zipimport assets, compress with upx
+RUN set -eux; \
+    release_api="https://api.github.com/repos/yt-dlp/yt-dlp/releases/tags/${YTDLP_VERSION}"; \
+    # choose search patterns depending on TARGETARCH
+    case "${TARGETARCH:-$(uname -m)}" in \
+      amd64|x86_64) pat="musl|x86_64|amd64"; ;; \
+      arm64|aarch64) pat="musl|aarch64|arm64"; ;; \
+      *) pat="musl|linux"; ;; \
+    esac; \
+    # prefer assets that mention musl and are not zip files
+    url=$(curl -fsSL "$release_api" | awk -F '"' -v pat="$pat" 'BEGIN{IGNORECASE=1} /browser_download_url/ { if($4 !~ /\.zip$/ && $4 ~ pat) {print $4; exit}}'); \
+    if [ -z "$url" ]; then \
+      # fallback: first non-zip asset
+      url=$(curl -fsSL "$release_api" | awk -F '"' '/browser_download_url/ { if($4 !~ /\.zip$/) {print $4; exit}}'); \
+    fi; \
+    if [ -z "$url" ]; then echo "Could not find yt-dlp binary asset for ${YTDLP_VERSION}"; exit 1; fi; \
+    echo "Downloading yt-dlp from: $url"; \
+    curl -fsSL "$url" -o /app/yt-dlp && chmod a+rx /app/yt-dlp && upx --best --lzma /app/yt-dlp && ls -lh /app/yt-dlp
+
+# Build the Next.js app (standalone)
 ENV NEXT_TELEMETRY_DISABLED 1
-
-# RUN yarn build
-
-# If using npm comment out above and use below instead
 RUN npm run build
+
+# remove build tools to keep builder small
+RUN apk del .build-deps || true
 
 # Production image, copy all the files and run next
 FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV production
-# Uncomment the following line in case you want to disable telemetry during runtime.
 ENV NEXT_TELEMETRY_DISABLED 1
 
-RUN apk update && \
-  apk add ffmpeg python3
+# Create group/user using build-time args (use defaults if not provided)
+ARG UID=1001
+ARG GID=1001
 
-RUN wget https://github.com/yt-dlp/yt-dlp/releases/download/2025.05.22/yt-dlp -O /usr/local/bin/yt-dlp && \
-  chmod a+rx /usr/local/bin/yt-dlp
+# Copy entire /app from builder in one go (includes yt-dlp in /app/yt-dlp and built standalone app)
+COPY --from=builder --chown=nextjs:nodejs /app /app
 
-# Use environment variables in the addgroup and adduser commands
-RUN addgroup --system --gid ${GID:-1001} nodejs && \
-  adduser --system --uid ${UID:-1001} --ingroup nodejs nextjs
+RUN apk add --no-cache ffmpeg && \
+    addgroup --system --gid ${GID} nodejs && \
+    adduser --system --uid ${UID} --ingroup nodejs nextjs && \
+    chmod a+rx /app/yt-dlp || true && \
+    ln -sf /app/yt-dlp /usr/local/bin/yt-dlp
 
-COPY --from=builder /app/public ./public
-
-# Automatically leverage output traces to reduce image size
-# https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Make sure yt-dlp is executable and on PATH
+ENV PATH=/app:${PATH}
 
 USER nextjs
 
 EXPOSE 3000
 
 ENV PORT 3000
-# set hostname to localhost
 ENV HOSTNAME "0.0.0.0"
 
 CMD ["node", "server.js"]
