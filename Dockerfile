@@ -46,10 +46,10 @@ RUN set -eux; \
     fi; \
     if [ -z "$url" ]; then echo "Could not find yt-dlp binary asset for ${YTDLP_VERSION}"; exit 1; fi; \
     echo "Downloading yt-dlp from: $url"; \
-    curl -fsSL "$url" -o /app/yt-dlp && chmod a+rx /app/yt-dlp && upx --best --lzma /app/yt-dlp && ls -lh /app/yt-dlp
+    curl -fsSL "$url" -o /app/yt-dlp && chmod a+rx /app/yt-dlp && ls -lh /app/yt-dlp
 
 # Build the Next.js app (standalone)
-ENV NEXT_TELEMETRY_DISABLED 1
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # remove build tools to keep builder small
@@ -59,8 +59,7 @@ RUN apk del .build-deps || true
 FROM base AS runner
 WORKDIR /app
 
-ENV NODE_ENV production
-ENV NEXT_TELEMETRY_DISABLED 1
+ENV NODE_ENV=production
 
 # Create group/user using build-time args (use defaults if not provided)
 ARG UID=1001
@@ -82,7 +81,7 @@ USER nextjs
 
 EXPOSE 3000
 
-ENV PORT 3000
-ENV HOSTNAME "0.0.0.0"
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
 
 CMD ["node", "server.js"]
