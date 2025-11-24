@@ -46,7 +46,7 @@ RUN set -eux; \
     fi; \
     if [ -z "$url" ]; then echo "Could not find yt-dlp binary asset for ${YTDLP_VERSION}"; exit 1; fi; \
     echo "Downloading yt-dlp from: $url"; \
-    curl -fsSL "$url" -o /app/yt-dlp && chmod a+rx /app/yt-dlp && ls -lh /app/yt-dlp
+    curl -fsSL "$url" -o /app/yt-dlp && chmod a+rx /app/yt-dlp
 
 # Build the Next.js app (standalone)
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -54,6 +54,26 @@ RUN npm run build
 
 # remove build tools to keep builder small
 RUN apk del .build-deps || true
+
+# --- NEW: clean builder /app, keep only standalone/static/public/yt-dlp to minimize final image ---
+RUN set -eux; \
+    mkdir -p /tmp/clean; \
+    # prefer standalone output (Next.js standalone build layout); fallback to copying .next if standalone missing
+    if [ -d /app/.next/standalone ]; then \
+      cp -a /app/.next/standalone/* /tmp/clean/; \
+    else \
+      cp -a /app/.next /tmp/clean/. || true; \
+    fi; \
+    # copy static and public if present
+    cp -a /app/.next/static /tmp/clean/. 2>/dev/null || true; \
+    cp -a /app/public /tmp/clean/. 2>/dev/null || true; \
+    # copy compressed yt-dlp if present
+    if [ -f /app/yt-dlp ]; then cp -a /app/yt-dlp /tmp/clean/; fi; \
+    [ -f /tmp/clean/yt-dlp ] && chmod a+rx /tmp/clean/yt-dlp || true; \
+    # remove everything at /app root and move cleaned artifacts back
+    find /app -mindepth 1 -maxdepth 1 -exec rm -rf {} +; \
+    mv /tmp/clean/* /app/ || true; rmdir /tmp/clean || true; \
+    echo "Remaining /app contents:"; ls -al /app
 
 # Production image, copy all the files and run next
 FROM base AS runner
