@@ -1,0 +1,51 @@
+name: Build Docker image and upload artifact
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-export:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            arch: amd64
+          - platform: linux/arm64
+            arch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Prepare output dir
+        run: mkdir -p artifacts
+
+      - name: Build image (multi-arch per job) and export tar
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          echo "Building for platform=${PLATFORM} arch=${ARCH}"
+          # Ensure a builder instance is available
+          docker buildx inspect --bootstrap
+          # Build and export a tarball for this platform
+          docker buildx build \
+            --platform "${PLATFORM}" \
+            --output "type=tar,dest=artifacts/yt-dlp-ui-${ARCH}.tar" \
+            .
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yt-dlp-ui-${{ matrix.arch }}.tar
+          path: artifacts/yt-dlp-ui-${{ matrix.arch }}.tar
