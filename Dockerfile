@@ -50,7 +50,7 @@ RUN set -eux; \
 
 # Build the Next.js app (standalone)
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npx update-browserslist-db@latest && npm run build
+RUN npx update-browserslist-db@latest && npm install -g npm@11.6.3 && npm audit fix && npm run build
 
 # --- NEW: clean builder /app, keep only standalone/static/public/yt-dlp to minimize final image ---
 RUN set -eux; \
