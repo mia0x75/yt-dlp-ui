@@ -30,22 +30,39 @@ jobs:
       - name: Prepare output dir
         run: mkdir -p artifacts
 
-      - name: Build image (multi-arch per job) and export tar
+ #     - name: Build image (multi-arch per job) and export tar
+ #       env:
+ #         PLATFORM: ${{ matrix.platform }}
+ #         ARCH: ${{ matrix.arch }}
+ #       run: |
+ #         echo "Building for platform=${PLATFORM} arch=${ARCH}"
+ #         # Ensure a builder instance is available
+ #         docker buildx inspect --bootstrap
+ #         # Build and export a tarball for this platform
+ #         docker buildx build \
+ #           --platform "${PLATFORM}" \
+ #           --output "type=tar,dest=artifacts/yt-dlp-ui-${ARCH}.tar" \
+ #           .
+ 
+      - name: Build image (per-platform) and export docker tar
         env:
           PLATFORM: ${{ matrix.platform }}
           ARCH: ${{ matrix.arch }}
         run: |
-          echo "Building for platform=${PLATFORM} arch=${ARCH}"
-          # Ensure a builder instance is available
           docker buildx inspect --bootstrap
-          # Build and export a tarball for this platform
           docker buildx build \
             --platform "${PLATFORM}" \
-            --output "type=tar,dest=artifacts/yt-dlp-ui-${ARCH}.tar" \
+            --output "type=docker,dest=artifacts/yt-dlp-ui-${ARCH}.tar" \
             .
-
+          gzip -9 artifacts/yt-dlp-ui-${ARCH}.tar
       - name: Upload image artifact
         uses: actions/upload-artifact@v4
         with:
-          name: yt-dlp-ui-${{ matrix.arch }}.tar
-          path: artifacts/yt-dlp-ui-${{ matrix.arch }}.tar
+          name: yt-dlp-ui-${{ matrix.arch }}.tar.gz
+          path: artifacts/yt-dlp-ui-${{ matrix.arch }}.tar.gz
+          
+#      - name: Upload image artifact
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: yt-dlp-ui-${{ matrix.arch }}.tar
+#          path: artifacts/yt-dlp-ui-${{ matrix.arch }}.tar
