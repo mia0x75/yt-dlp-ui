@@ -29,12 +29,12 @@ export function DownloadOptionsInfoDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleChangeOpen}>
-      <DialogContent className='max-w-3xl max-h-full flex flex-col'>
+      <DialogContent className='max-w-3xl max-h-full flex flex-col gap-3 p-3'>
         <div className='flex-shrink-0'>
           <div className='font-bold text-lg'>Options used when downloading</div>
         </div>
         <Divider></Divider>
-        <div className='flex-shrink overflow-auto text-sm'>
+        <div className='flex-shrink overflow-auto text-sm space-y-3 p-2'>
           <div className='break-all'>
             Url: <b>{video?.url ?? ''}</b>
           </div>
