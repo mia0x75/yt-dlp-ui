@@ -33,21 +33,20 @@ RUN apk add --no-cache --virtual .build-deps curl ca-certificates upx bash && \
 RUN set -eux; \
     release_api="https://api.github.com/repos/yt-dlp/yt-dlp/releases/tags/${YTDLP_VERSION}"; \
     arch="$(echo "${TARGETARCH:-$(uname -m)}" | tr '[:upper:]' '[:lower:]')"; \
-    if [ "$arch" = "amd64" ] || [ "$arch" = "x86_64" ]; then \
-      pattern="musl|x86_64|amd64|musllinux_x86_64|yt-dlp_musllinux"; \
-    elif [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then \
-      pattern="musl|aarch64|arm64|musllinux_aarch64|yt-dlp_musllinux_aarch64"; \
+    if [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then \
+      token="yt-dlp_musllinux_aarch64"; \
     else \
-      pattern="musl|linux"; \
+      token="yt-dlp_musllinux"; \
     fi; \
-    url=$(curl -fsSL "$release_api" | awk -F '"' -v pat="$pattern" 'BEGIN{IGNORECASE=1} $4 !~ /\.zip$/ && $4 ~ pat {print $4; exit}'); \
+    # try to find a musl binary matching the token (avoid .zip); fallback to first non-zip asset
+    url="$(curl -fsSL "$release_api" | grep -o '"browser_download_url":[[:space:]]*"[^"]*' | sed 's/.*"browser_download_url":[[:space:]]*"\([^"]*\)".*/\1/' | grep -i "$token" | grep -v '\.zip$' | head -n1)"; \
     if [ -z "$url" ]; then \
-      # fallback: first non-zip asset
-      url=$(curl -fsSL "$release_api" | awk -F '"' '!/\.zip$/ {print $4; exit}'); \
+      url="$(curl -fsSL "$release_api" | grep -o '"browser_download_url":[[:space:]]*"[^"]*' | sed 's/.*"browser_download_url":[[:space:]]*"\([^"]*\)".*/\1/' | grep -v '\.zip$' | head -n1)"; \
     fi; \
-    if [ -z "$url" ]; then echo "Could not find yt-dlp binary asset for ${YTDLP_VERSION} (arch=${arch})"; exit 1; fi; \
+    [ -n "$url" ] || { echo "Could not find yt-dlp asset for ${YTDLP_VERSION} (arch=${arch})"; exit 1; }; \
     echo "Downloading yt-dlp from: $url"; \
-    curl -fsSL "$url" -o /app/yt-dlp && chmod a+rx /app/yt-dlp && upx --best --lzma /app/yt-dlp || true && ls -lh /app/yt-dlp
+    curl -fsSL "$url" -o /app/yt-dlp && chmod a+rx /app/yt-dlp && upx --best --lzma /app/yt-dlp || true; \
+    ls -lh /app/yt-dlp
 
 # Build the Next.js app (standalone)
 ENV NEXT_TELEMETRY_DISABLED=1
