@@ -57,21 +57,19 @@ RUN apk del .build-deps || true
 
 # --- NEW: clean builder /app, keep only standalone/static/public/yt-dlp to minimize final image ---
 RUN set -eux; \
-    mkdir -p /tmp/clean; \
+    mkdir -p /tmp/clean/.next/static; \
     # prefer standalone output (Next.js standalone build layout); fallback to copying .next if standalone missing
     if [ -d /app/.next/standalone ]; then \
-      cp -a /app/.next/standalone/* /tmp/clean/; \
-    else \
-      cp -a /app/.next /tmp/clean/. || true; \
+      mv -a /app/.next/standalone /tmp/clean/; \
     fi; \
     # copy static and public if present
-    cp -a /app/.next/static /tmp/clean/. 2>/dev/null || true; \
-    cp -a /app/public /tmp/clean/. 2>/dev/null || true; \
+    mv /app/.next/static /tmp/clean/.next 2>/dev/null || true; \
+    mv /app/public /tmp/clean/ 2>/dev/null || true; \
     # copy compressed yt-dlp if present
-    if [ -f /app/yt-dlp ]; then cp -a /app/yt-dlp /tmp/clean/; fi; \
+    if [ -f /app/yt-dlp ]; then mv /app/yt-dlp /tmp/clean/; fi; \
     [ -f /tmp/clean/yt-dlp ] && chmod a+rx /tmp/clean/yt-dlp || true; \
     # remove everything at /app root and move cleaned artifacts back
-    find /app -mindepth 1 -maxdepth 1 -exec rm -rf {} +; \
+    rm /app; mkdir /app; \
     mv /tmp/clean/* /app/ || true; rmdir /tmp/clean || true; \
     echo "Remaining /app contents:"; ls -al /app
 
